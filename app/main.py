@@ -66,7 +66,6 @@ async def webhook(
             },
         )
 
-    # ✅ THIS IS WHAT THE TEST EXPECTS
     return {
         "signature_ok": True
     }
