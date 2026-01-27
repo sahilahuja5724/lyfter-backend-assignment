@@ -10,7 +10,6 @@ client = TestClient(app)
 
 
 def test_webhook_valid_signature(monkeypatch):
-    # Set secret for test
     monkeypatch.setenv("WEBHOOK_SECRET", "supersecret")
 
     payload = {"event": "test"}
