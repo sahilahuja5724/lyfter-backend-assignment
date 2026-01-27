@@ -1,11 +1,8 @@
 __pycache__/
 *.pyc
-
+.venv/
 venv/
-
+.env
 .pytest_cache/
-
-.vscode
-
-.DS_Store
-Thumbs.db
+app.db
+app/app.db

@@ -1,71 +1,55 @@
-import os
-import json
+from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi.responses import JSONResponse, PlainTextResponse
 import hmac
 import hashlib
 
-from fastapi import FastAPI, Request, Header, HTTPException, status, Body
-from fastapi.responses import JSONResponse
+from app.config import WEBHOOK_SECRET
+from app.storage import init_db, insert_message, list_messages
+from app.metrics import REQUEST_COUNT, MESSAGES_RECEIVED, generate_metrics
 
 app = FastAPI()
 
 
-@app.get("/")
-def root():
-    return {"message": "Hello World"}
+@app.on_event("startup")
+def startup():
+    init_db()
 
 
 @app.get("/health/live")
-def health_live():
+def live():
     return {"status": "alive"}
 
 
 @app.get("/health/ready")
-def health_ready():
-    if not os.getenv("WEBHOOK_SECRET"):
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not ready"},
-        )
+def ready():
     return {"status": "ready"}
 
 
 @app.post("/webhook")
-async def webhook(
-    request: Request,
-    payload: dict = Body(...),
-    x_signature: str | None = Header(None),
-):
-    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+async def webhook(request: Request, x_signature: str = Header(None)):
+    raw_body = await request.body()
 
-    if not WEBHOOK_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="WEBHOOK_SECRET not set",
-        )
-
-    if not x_signature:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing signature",
-        )
-
-    raw_body = json.dumps(payload, separators=(",", ":")).encode()
-
-    expected_signature = hmac.new(
+    expected = hmac.new(
         WEBHOOK_SECRET.encode(),
         raw_body,
-        hashlib.sha256,
+        hashlib.sha256
     ).hexdigest()
 
-    if not hmac.compare_digest(x_signature, expected_signature):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                "error": "Invalid signature",
-                "signature_ok": False,
-            },
-        )
+    if not x_signature or not hmac.compare_digest(x_signature, expected):
+        raise HTTPException(status_code=401, detail={"signature_ok": False})
 
-    return {
-        "signature_ok": True
-    }
+    data = await request.json()
+    insert_message(data["id"], data["sender"], data["content"])
+    MESSAGES_RECEIVED.inc()
+
+    return {"signature_ok": True}
+
+
+@app.get("/messages")
+def get_messages(limit: int = 10, offset: int = 0):
+    return list_messages(limit, offset)
+
+
+@app.get("/metrics")
+def metrics():
+    return PlainTextResponse(generate_metrics())
