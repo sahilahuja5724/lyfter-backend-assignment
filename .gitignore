@@ -1,16 +1,11 @@
-# Python cache
 __pycache__/
 *.pyc
 
-# Virtual environment
 venv/
 
-# Pytest
 .pytest_cache/
 
-# VS Code
-.vscode/
+.vscode
 
-# OS files
 .DS_Store
 Thumbs.db
